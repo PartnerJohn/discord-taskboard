@@ -3,9 +3,18 @@
 VTuber AI Streaming Agent
 Automated VTuber that discusses current events with a Live2D avatar.
 
-Required environment variables:
-    ANTHROPIC_API_KEY       - Anthropic API key for commentary generation
-    OBS_WS_PASSWORD         - OBS WebSocket password (optional)
+Environment variables (all optional depending on backend):
+    ANTHROPIC_API_KEY       - Anthropic API key (for Claude backend)
+    LLM_BASE_URL            - OpenAI-compatible API URL (for local models)
+    OBS_WS_PASSWORD         - OBS WebSocket password
+
+LLM backends:
+    --provider ollama       - Ollama (default, localhost:11434)
+    --provider lmstudio     - LM Studio (localhost:1234)
+    --provider llamacpp     - llama.cpp server (localhost:8080)
+    --provider vllm         - vLLM (localhost:8000)
+    --provider anthropic    - Anthropic Claude API
+    --base-url URL          - Any OpenAI-compatible endpoint
 
 Required external software:
     - OBS Studio with obs-websocket plugin (v5+)
@@ -13,8 +22,10 @@ Required external software:
     - ffplay (from ffmpeg) for audio playback
 
 Usage:
-    python vtuber_agent.py
-    python vtuber_agent.py --voice en-US-GuyNeural --interval 120
+    python vtuber_agent.py --provider ollama --model llama3.1
+    python vtuber_agent.py --provider lmstudio
+    python vtuber_agent.py --base-url http://localhost:5000/v1 --model my-model
+    python vtuber_agent.py --provider anthropic --model claude-sonnet-4-6
 """
 
 import argparse
@@ -51,9 +62,14 @@ class VTuberAgent:
     vts_host: str = "localhost"
     vts_port: int = 8001
 
+    # LLM configuration
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_base_url: str = ""
+
     # Components
     news: NewsFetcher = field(default_factory=NewsFetcher)
-    commentary: CommentaryEngine = field(default_factory=CommentaryEngine)
+    commentary: CommentaryEngine = field(default=None)
     tts: TTSEngine = field(default=None)
     vtube: VTubeStudioController = field(default=None)
     obs: OBSController = field(default=None)
@@ -63,6 +79,12 @@ class VTuberAgent:
     _speech_counter: int = 0
 
     def __post_init__(self):
+        if self.commentary is None:
+            self.commentary = CommentaryEngine(
+                model=self.llm_model,
+                provider=self.llm_provider,
+                base_url=self.llm_base_url,
+            )
         if self.tts is None:
             self.tts = TTSEngine(voice=self.voice)
         if self.vtube is None:
@@ -194,6 +216,15 @@ class VTuberAgent:
 
 def parse_args():
     parser = argparse.ArgumentParser(description="VTuber AI Streaming Agent")
+    # LLM backend
+    parser.add_argument("--provider", default="",
+                        help="LLM provider: ollama, lmstudio, llamacpp, vllm, anthropic (default: auto-detect)")
+    parser.add_argument("--model", default="",
+                        help="Model name (default: auto per provider, e.g. llama3.1 for Ollama)")
+    parser.add_argument("--base-url", default="",
+                        help="OpenAI-compatible API base URL (overrides --provider)")
+
+    # Streaming config
     parser.add_argument("--voice", default="en-US-AriaNeural",
                         help="Edge TTS voice (default: en-US-AriaNeural)")
     parser.add_argument("--interval", type=int, default=180,
@@ -215,6 +246,9 @@ async def run(args):
         obs_port=args.obs_port,
         vts_host=args.vts_host,
         vts_port=args.vts_port,
+        llm_provider=args.provider,
+        llm_model=args.model,
+        llm_base_url=args.base_url,
     )
 
     loop = asyncio.get_running_loop()
