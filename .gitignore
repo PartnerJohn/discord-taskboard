@@ -1,0 +1,24 @@
+# --- added for GitHub backup ---
+node_modules/
+.next/
+dist/
+build/
+out/
+.output/
+.turbo/
+.cache/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+/data/
+.railway/
+.vercel/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.tmp
